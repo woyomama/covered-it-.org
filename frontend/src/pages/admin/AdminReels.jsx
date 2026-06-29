@@ -22,7 +22,11 @@ export default function AdminReels() {
       <div className="mt-6 grid md:grid-cols-3 lg:grid-cols-4 gap-4">
         {list.map((r) => (
           <div key={r.id} className="admin-card p-3">
-            <img src={r.thumbnail} alt="" className="w-full aspect-[9/16] rounded object-cover" />
+            {r.thumbnail ? (
+              <img src={r.thumbnail} alt="" className="w-full aspect-[9/16] rounded object-cover" />
+            ) : (
+              <div className="w-full aspect-[9/16] rounded bg-white/5" />
+            )}
             <div className="mt-2 font-semibold">{r.title}</div>
             <button onClick={() => del(r.id)} className="mt-2 text-pink-400 text-xs"><Trash2 className="w-3 h-3 inline" /> Delete</button>
           </div>

@@ -105,7 +105,7 @@ export default function Checkout() {
                 const compat = models.map((m) => m.name);
                 return (
                   <div key={key} className="card-pink p-4 flex gap-4 items-center" data-testid={`cart-item-${i.product_id}`}>
-                    <img src={i.image} alt="" className="w-20 h-20 rounded-lg object-cover" />
+                    {i.image ? <img src={i.image} alt="" className="w-20 h-20 rounded-lg object-cover" /> : <div className="w-20 h-20 rounded-lg bg-pink-100" />}
                     <div className="flex-1 min-w-0">
                       <div className="font-bricolage font-semibold">{i.name}</div>
                       <div className="text-xs uppercase tracking-widest text-pink-700 font-mono-sleek">{i.category}</div>

@@ -13,7 +13,7 @@ export default function AdminDashboard() {
     { l: "Products", v: s.total_products,      I: Package },
     { l: "Customers",v: s.customers,           I: Users },
     { l: "Pending",  v: s.pending,             I: TrendingUp },
-    { l: "Confirmed",v: s.confirmed,           I: TrendingUp },
+    { l: "Locked In",v: s.confirmed,           I: TrendingUp },
   ];
 
   return (
@@ -25,7 +25,7 @@ export default function AdminDashboard() {
         {cards.map((c) => (
           <div key={c.l} className="admin-card p-5">
             <c.I className="w-5 h-5 text-emerald-400" />
-            <div className="mt-3 text-xs uppercase tracking-widest text-slate-400 font-mono-sleek">{c.l}</div>
+            <div className="mt-3 text-xs uppercase tracking-widest text-slate-400 font-mono-sleek" style={{ fontVariantLigatures: 'none', fontFeatureSettings: '"liga" 0, "dlig" 0, "clig" 0, "calt" 0' }}>{c.l}</div>
             <div className="text-3xl font-display-navy chrome-text-navy mt-1">{c.v}</div>
           </div>
         ))}

@@ -50,7 +50,7 @@ export default function Track() {
             </div>
 
             <div className="mt-6 grid grid-cols-4 gap-2">
-              {[{l:"Placed",I:Check},{l:"Confirmed",I:Lock},{l:"Shipped",I:Truck},{l:"Delivered",I:Package}].map((s,i)=>(
+              {[{l:"Placed",I:Check},{l:"Locked In",I:Lock},{l:"Shipped",I:Truck},{l:"Delivered",I:Package}].map((s,i)=>(
                 <div key={s.l} className={`text-center p-3 rounded-lg border ${i<=stepIdx?'bg-pink-100 border-pink-300':'bg-white border-pink-100 opacity-50'}`}>
                   <s.I className="w-5 h-5 mx-auto text-pink-700" />
                   <div className="text-xs uppercase tracking-widest font-mono-sleek mt-1">{s.l}</div>
@@ -61,7 +61,7 @@ export default function Track() {
             <div className="mt-6 space-y-2">
               {order.items.map((it,i)=>(
                 <div key={i} className="flex gap-3 items-center p-3 bg-white rounded-lg">
-                  <img src={it.image} className="w-14 h-14 rounded object-cover" alt="" />
+                  {it.image ? <img src={it.image} className="w-14 h-14 rounded object-cover" alt="" /> : <div className="w-14 h-14 rounded bg-pink-100" />}
                   <div className="flex-1">
                     <div className="font-bricolage font-semibold">{it.name}</div>
                     <div className="text-xs text-slate-500">{it.phone_model || "—"} · qty {it.qty}</div>

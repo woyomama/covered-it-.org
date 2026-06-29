@@ -46,7 +46,7 @@ export default function AdminProducts() {
         {filtered.map((p) => (
           <div key={p.id} className="admin-card p-4" data-testid={`product-row-${p.id}`}>
             <div className="flex gap-3">
-              <img src={p.images?.[0]} alt="" className="w-20 h-20 rounded object-cover bg-white/5" />
+              {p.images?.[0] ? <img src={p.images[0]} alt="" className="w-20 h-20 rounded object-cover bg-white/5" /> : <div className="w-20 h-20 rounded bg-white/5" />}
               <div className="flex-1 min-w-0">
                 <div className="font-semibold">{p.name}</div>
                 <div className="text-xs text-slate-400">{p.category} · ₹{p.price} · stock {p.stock}</div>

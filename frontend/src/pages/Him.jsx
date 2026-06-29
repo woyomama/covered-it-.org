@@ -21,10 +21,10 @@ export default function Him() {
           <div className="relative z-10">
             <div className="chip-navy mb-4"><Lock className="w-3 h-3" /> Midnight Drop · 0F2C45</div>
             <h1 className="font-display-navy text-7xl md:text-9xl leading-[0.85] chrome-text-navy">
-              Stone<br/>cold.<br/>Liquid<br/>metal.
+              He's<br/>that<br/>guy.<br/><span className="italic" style={{color:'#15a678'}}>period.</span>
             </h1>
             <p className="mt-6 max-w-md font-bricolage text-slate-300 text-lg">
-              Midnight navy. Cracked stone textures. Emerald liquid metal swirls. No logos. No noise. Just locked.
+              No logo. No caption. Just liquid metal & cracked stone. For the boys who pull up — never post.
             </p>
             <div className="mt-8 flex gap-3 flex-wrap">
               <a href="#shop" className="btn-chrome-navy" data-testid="him-shop-cta">Enter the vault</a>

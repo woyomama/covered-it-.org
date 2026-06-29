@@ -36,7 +36,7 @@ export default function AdminOrders() {
             <div className="mt-3 border-t border-white/5 pt-3 grid md:grid-cols-2 gap-2 text-sm">
               {o.items.map((i, idx) => (
                 <div key={idx} className="flex gap-2 items-center">
-                  <img src={i.image} className="w-10 h-10 rounded object-cover" alt="" />
+                  {i.image ? <img src={i.image} className="w-10 h-10 rounded object-cover" alt="" /> : <div className="w-10 h-10 rounded bg-white/5" />}
                   <div className="flex-1 min-w-0">
                     <div className="truncate">{i.name}</div>
                     <div className="text-xs text-slate-400">{i.phone_model || "—"} · qty {i.qty}</div>

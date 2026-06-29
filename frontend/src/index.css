@@ -73,9 +73,16 @@ body {
 .font-display-pink   { font-family: "Boska", "Editorial New", serif; letter-spacing: -0.02em; }
 .font-display-navy   { font-family: "Clash Display", "Tanker", sans-serif; letter-spacing: -0.03em; }
 .font-display-collab { font-family: "Editorial New", "Boska", serif; letter-spacing: -0.025em; }
-.font-mono-sleek     { font-family: "Space Grotesk", monospace; letter-spacing: -0.02em; }
+.font-mono-sleek     { font-family: "Space Grotesk", monospace; letter-spacing: -0.02em; font-variant-ligatures: none; font-feature-settings: "liga" 0, "dlig" 0, "clig" 0; }
 .font-tanker         { font-family: "Tanker", "Clash Display", sans-serif; letter-spacing: 0.01em; }
 .font-bricolage      { font-family: "Bricolage Grotesque", sans-serif; }
+
+/* aggressive — any uppercase or display label kills ligatures */
+[class*="uppercase"], .chip-pink, .chip-navy, .font-mono-sleek, .font-display-navy, .font-display-pink, .font-display-collab, [class*="tracking-widest"] {
+  font-variant-ligatures: none !important;
+  font-feature-settings: "liga" 0, "dlig" 0, "clig" 0, "calt" 0 !important;
+  -webkit-font-feature-settings: "liga" 0, "dlig" 0, "clig" 0, "calt" 0 !important;
+}
 
 /* =================== CHROME / METALLIC =================== */
 .chrome-text-pink {
