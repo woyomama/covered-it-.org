@@ -154,7 +154,7 @@ class OrderIn(BaseModel):
     items: List[CartItem]
     address: Address
     coupon_code: Optional[str] = None
-    payment_method: Literal["cod", "prepaid"] = "cod"
+    payment_method: Literal["cod", "upi", "phonepe", "bhim", "card", "prepaid"] = "cod"
     notes: Optional[str] = ""
 
 
@@ -357,10 +357,69 @@ async def apply_coupon(body: CouponApply):
 # =====================================================
 async def _shiprocket_create_shipment(order: dict) -> dict:
     """
-    PLACEHOLDER — DO NOT MODIFY (Shiprocket auto-shipment integration).
-    Hooked here so order creation triggers shipment creation in production.
+    Shiprocket auto-shipment.
+    Falls back to mocked AWB when creds are not configured in /admin/settings.
+    DO NOT remove the mock path — it's the publish-day fallback.
     """
-    return {"awb": f"SR{order['id'][:8].upper()}", "courier": "Shiprocket-Mock", "tracking_url": f"/track/{order['id']}"}
+    s = await _settings_raw() if "_settings_raw" in globals() else {}
+    email = s.get("shiprocket_email")
+    password = s.get("shiprocket_password")
+    token = s.get("shiprocket_token")
+    # No creds → mock
+    if not (email and password):
+        return {"awb": f"SR{order['id'][:8].upper()}", "courier": "Shiprocket-Mock", "tracking_url": f"/track/{order['id']}", "mocked": True}
+    # Try real Shiprocket
+    try:
+        import requests as _rq
+        if not token:
+            r = _rq.post("https://apiv2.shiprocket.in/v1/external/auth/login",
+                         json={"email": email, "password": password}, timeout=15)
+            if r.status_code == 200:
+                token = r.json().get("token")
+                await db.settings.update_one({"id": "store"}, {"$set": {"shiprocket_token": token}})
+        if not token:
+            return {"awb": f"SR{order['id'][:8].upper()}", "courier": "Shiprocket-Mock-NoToken", "tracking_url": f"/track/{order['id']}", "mocked": True}
+        addr = order["address"]
+        items = order["items"]
+        payload = {
+            "order_id": order["id"][:40],
+            "order_date": order["created_at"][:10],
+            "pickup_location": "Primary",
+            "billing_customer_name": addr["full_name"],
+            "billing_last_name": "",
+            "billing_address": addr["address_line1"],
+            "billing_address_2": addr.get("address_line2") or "",
+            "billing_city": addr["city"],
+            "billing_pincode": addr["pincode"],
+            "billing_state": addr["state"],
+            "billing_country": addr.get("country") or "India",
+            "billing_email": addr["email"],
+            "billing_phone": addr["phone"],
+            "shipping_is_billing": True,
+            "order_items": [{"name": i["name"], "sku": i["product_id"][:24], "units": i["qty"], "selling_price": i["price"]} for i in items],
+            "payment_method": "COD" if order["payment_method"] == "cod" else "Prepaid",
+            "sub_total": order["subtotal"],
+            "length": 12, "breadth": 8, "height": 3, "weight": 0.1,
+        }
+        r2 = _rq.post(
+            "https://apiv2.shiprocket.in/v1/external/orders/create/adhoc",
+            json=payload, headers={"Authorization": f"Bearer {token}"}, timeout=20,
+        )
+        data = r2.json() if r2.text else {}
+        if r2.status_code in (200, 201):
+            return {
+                "awb": data.get("awb_code") or f"SR{order['id'][:8].upper()}",
+                "courier": data.get("courier_name") or "Shiprocket",
+                "shipment_id": data.get("shipment_id"),
+                "order_id_sr": data.get("order_id"),
+                "tracking_url": data.get("tracking_url") or f"/track/{order['id']}",
+                "mocked": False,
+            }
+        log.error(f"Shiprocket create order non-200: {r2.status_code} {r2.text[:300]}")
+        return {"awb": f"SR{order['id'][:8].upper()}", "courier": "Shiprocket-Mock-Error", "tracking_url": f"/track/{order['id']}", "mocked": True, "error": r2.text[:200]}
+    except Exception as e:
+        log.error(f"Shiprocket failed: {e}")
+        return {"awb": f"SR{order['id'][:8].upper()}", "courier": "Shiprocket-Mock-Exception", "tracking_url": f"/track/{order['id']}", "mocked": True}
 
 
 @api.post("/orders")
@@ -389,17 +448,20 @@ async def create_order(body: OrderIn):
         "total": total,
         "coupon_code": coupon_used,
         "payment_method": body.payment_method,
+        "payment_status": "pending" if body.payment_method != "cod" else "cod",
         "notes": body.notes,
         "status": "pending",
         "shipment": None,
         "created_at": now_iso(),
     }
-    try:
-        ship = await _shiprocket_create_shipment(order)
-        order["shipment"] = ship
-        order["status"] = "confirmed"
-    except Exception as e:
-        log.error(f"shiprocket failed: {e}")
+    # For prepaid orders, DON'T auto-ship yet — only after payment is verified.
+    if body.payment_method == "cod":
+        try:
+            ship = await _shiprocket_create_shipment(order)
+            order["shipment"] = ship
+            order["status"] = "confirmed"
+        except Exception as e:
+            log.error(f"shiprocket failed: {e}")
     await db.orders.insert_one(order)
     return clean(order)
 
@@ -509,19 +571,188 @@ async def shiprocket_webhook(payload: dict):
 
 
 # =====================================================
-#  SETTINGS / META
+#  SETTINGS / META  (with secret-safe responses)
 # =====================================================
+_SECRET_KEYS = {"razorpay_key_secret", "razorpay_webhook_secret", "shiprocket_password"}
+
+def _mask_settings(s: dict) -> dict:
+    out = dict(s or {})
+    for k in _SECRET_KEYS:
+        if out.get(k):
+            out[k] = "•" * 6 + str(out[k])[-4:]
+    # also flag which integrations are connected
+    out["razorpay_connected"] = bool((s or {}).get("razorpay_key_id") and (s or {}).get("razorpay_key_secret"))
+    out["shiprocket_connected"] = bool((s or {}).get("shiprocket_email") and (s or {}).get("shiprocket_password"))
+    return out
+
+
+async def _settings_raw() -> dict:
+    return await db.settings.find_one({"id": "store"}, {"_id": 0}) or {}
+
+
 @api.get("/settings")
 async def get_settings():
-    s = await db.settings.find_one({"id": "store"}, {"_id": 0})
-    return s or {"id": "store", "pickup_pincode": os.environ.get("PICKUP_PINCODE", "400043")}
+    s = await _settings_raw()
+    base = {
+        "id": "store",
+        "pickup_pincode": os.environ.get("PICKUP_PINCODE", "400043"),
+        "store_name": "Covered IT!",
+    }
+    return _mask_settings({**base, **s})
 
 
 @api.put("/settings")
 async def update_settings(body: dict, admin=Depends(get_current_admin)):
-    body["id"] = "store"
-    await db.settings.update_one({"id": "store"}, {"$set": body}, upsert=True)
-    return body
+    body.pop("id", None)
+    # only persist non-empty fields so masked placeholders don't overwrite secrets
+    updates = {k: v for k, v in body.items() if v not in ("", None) and not (isinstance(v, str) and v.startswith("••••••"))}
+    updates["id"] = "store"
+    await db.settings.update_one({"id": "store"}, {"$set": updates}, upsert=True)
+    s = await _settings_raw()
+    return _mask_settings(s)
+
+
+@api.get("/payments/methods")
+async def payment_methods():
+    """Public — tells the checkout which payment options to show."""
+    s = await _settings_raw()
+    rzp = bool(s.get("razorpay_key_id") and s.get("razorpay_key_secret"))
+    methods = [{"id": "cod", "label": "Cash on Delivery", "enabled": True}]
+    methods.append({"id": "upi",     "label": "UPI",      "enabled": rzp, "provider": "razorpay"})
+    methods.append({"id": "phonepe", "label": "PhonePe",  "enabled": rzp, "provider": "razorpay"})
+    methods.append({"id": "bhim",    "label": "BHIM",     "enabled": rzp, "provider": "razorpay"})
+    methods.append({"id": "card",    "label": "Card",     "enabled": rzp, "provider": "razorpay"})
+    return {"methods": methods, "razorpay_key_id": s.get("razorpay_key_id") if rzp else None}
+
+
+# =====================================================
+#  PAYMENTS — Razorpay
+# =====================================================
+import razorpay as _razorpay
+import hmac as _hmac
+import hashlib as _hashlib
+
+
+async def _rzp_client():
+    s = await _settings_raw()
+    kid = s.get("razorpay_key_id")
+    sec = s.get("razorpay_key_secret")
+    if not kid or not sec:
+        raise HTTPException(400, "Razorpay not configured. Connect it in /admin/settings.")
+    return _razorpay.Client(auth=(kid, sec)), kid, sec
+
+
+class RzpOrderIn(BaseModel):
+    amount: float  # in INR (we convert to paise)
+    order_id: str  # our internal order id
+
+
+@api.post("/payments/razorpay/order")
+async def create_razorpay_order(body: RzpOrderIn):
+    client_rzp, kid, _ = await _rzp_client()
+    paise = int(round(body.amount * 100))
+    rzp_order = client_rzp.order.create({
+        "amount": paise,
+        "currency": "INR",
+        "receipt": body.order_id[:40],
+        "payment_capture": 1,
+    })
+    await db.orders.update_one(
+        {"id": body.order_id},
+        {"$set": {"razorpay.order_id": rzp_order["id"], "razorpay.amount": paise, "razorpay.status": "created"}},
+    )
+    return {"key_id": kid, "order_id": rzp_order["id"], "amount": paise, "currency": "INR"}
+
+
+class RzpVerifyIn(BaseModel):
+    order_id: str  # our internal order id
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+
+
+@api.post("/payments/razorpay/verify")
+async def verify_razorpay(body: RzpVerifyIn):
+    _, _, secret = await _rzp_client()
+    expected = _hmac.new(
+        secret.encode(),
+        f"{body.razorpay_order_id}|{body.razorpay_payment_id}".encode(),
+        _hashlib.sha256,
+    ).hexdigest()
+    if not _hmac.compare_digest(expected, body.razorpay_signature):
+        raise HTTPException(400, "Invalid Razorpay signature")
+    await db.orders.update_one(
+        {"id": body.order_id},
+        {"$set": {
+            "payment_status": "paid",
+            "status": "confirmed",
+            "razorpay.payment_id": body.razorpay_payment_id,
+            "razorpay.signature": body.razorpay_signature,
+            "razorpay.status": "paid",
+        }},
+    )
+    # Trigger shipment now that we've been paid
+    order = await db.orders.find_one({"id": body.order_id}, {"_id": 0})
+    if order and not order.get("shipment"):
+        try:
+            ship = await _shiprocket_create_shipment(order)
+            await db.orders.update_one({"id": body.order_id}, {"$set": {"shipment": ship}})
+            order["shipment"] = ship
+        except Exception as e:
+            log.error(f"shiprocket post-payment failed: {e}")
+    return {"ok": True, "order": order}
+
+
+# =====================================================
+#  INTEGRATION TESTS (admin click-to-test)
+# =====================================================
+@api.post("/integrations/razorpay/disconnect")
+async def disconnect_razorpay(admin=Depends(get_current_admin)):
+    await db.settings.update_one({"id": "store"}, {"$unset": {"razorpay_key_id": "", "razorpay_key_secret": "", "razorpay_webhook_secret": ""}})
+    return {"ok": True}
+
+
+@api.post("/integrations/shiprocket/disconnect")
+async def disconnect_shiprocket(admin=Depends(get_current_admin)):
+    await db.settings.update_one({"id": "store"}, {"$unset": {"shiprocket_email": "", "shiprocket_password": "", "shiprocket_token": ""}})
+    return {"ok": True}
+
+
+@api.post("/integrations/razorpay/test")
+async def test_razorpay(admin=Depends(get_current_admin)):
+    try:
+        client_rzp, _, _ = await _rzp_client()
+        # create a tiny test order
+        t = client_rzp.order.create({"amount": 100, "currency": "INR", "receipt": "ci-test"})
+        return {"ok": True, "test_order_id": t.get("id")}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Razorpay test failed: {e}")
+
+
+@api.post("/integrations/shiprocket/test")
+async def test_shiprocket(admin=Depends(get_current_admin)):
+    s = await _settings_raw()
+    email = s.get("shiprocket_email")
+    password = s.get("shiprocket_password")
+    if not email or not password:
+        raise HTTPException(400, "Shiprocket not configured")
+    try:
+        import requests
+        r = requests.post(
+            "https://apiv2.shiprocket.in/v1/external/auth/login",
+            json={"email": email, "password": password}, timeout=15,
+        )
+        if r.status_code != 200:
+            raise HTTPException(400, f"Shiprocket auth failed: {r.text[:200]}")
+        token = r.json().get("token")
+        await db.settings.update_one({"id": "store"}, {"$set": {"shiprocket_token": token}})
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Shiprocket test failed: {e}")
 
 
 # =====================================================

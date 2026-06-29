@@ -4,7 +4,20 @@ import api from "@/lib/api";
 import { useCart } from "@/context/Cart";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
-import { Trash2, Tag, Lock, Check } from "lucide-react";
+import { Trash2, Tag, Lock, Check, Banknote, Smartphone, CreditCard } from "lucide-react";
+
+const PM_ICONS = { cod: Banknote, upi: Smartphone, phonepe: Smartphone, bhim: Smartphone, card: CreditCard };
+
+function loadRazorpayScript() {
+  return new Promise((resolve) => {
+    if (window.Razorpay) return resolve(true);
+    const s = document.createElement("script");
+    s.src = "https://checkout.razorpay.com/v1/checkout.js";
+    s.onload = () => resolve(true);
+    s.onerror = () => resolve(false);
+    document.body.appendChild(s);
+  });
+}
 
 export default function Checkout() {
   const nav = useNavigate();
@@ -19,10 +32,15 @@ export default function Checkout() {
     city: "", state: "", pincode: "", country: "India",
   });
   const [payment, setPayment] = useState("cod");
+  const [methods, setMethods] = useState([{ id: "cod", label: "Cash on Delivery", enabled: true }]);
+  const [rzpKey, setRzpKey] = useState(null);
   const [placing, setPlacing] = useState(false);
   const [placed, setPlaced] = useState(null);
 
-  useEffect(() => { api.get("/phone-models").then((r) => setModels(r.data)); }, []);
+  useEffect(() => {
+    api.get("/phone-models").then((r) => setModels(r.data));
+    api.get("/payments/methods").then((r) => { setMethods(r.data.methods); setRzpKey(r.data.razorpay_key_id); });
+  }, []);
 
   const applyCoupon = async () => {
     if (!coupon.trim()) return;
@@ -50,14 +68,58 @@ export default function Checkout() {
     }
     setPlacing(true);
     try {
-      const { data } = await api.post("/orders", {
+      // 1) Create our internal order
+      const { data: order } = await api.post("/orders", {
         items, address: addr, coupon_code: coupon || null, payment_method: payment, notes: "",
       });
-      setPlaced(data);
-      clear();
+
+      // 2) If COD → done immediately
+      if (payment === "cod") {
+        setPlaced(order); clear();
+        return;
+      }
+
+      // 3) Prepaid → open Razorpay checkout
+      const ok = await loadRazorpayScript();
+      if (!ok) throw new Error("Failed to load Razorpay");
+
+      const { data: rzp } = await api.post("/payments/razorpay/order", { amount: order.total, order_id: order.id });
+
+      const methodHint = { upi: { upi: { flow: "collect" } }, phonepe: {}, bhim: {}, card: {} }[payment] || {};
+      const rzpInstance = new window.Razorpay({
+        key: rzp.key_id,
+        amount: rzp.amount,
+        currency: rzp.currency,
+        order_id: rzp.order_id,
+        name: "Covered IT!",
+        description: payment === "upi" ? "UPI Payment" : payment === "phonepe" ? "PhonePe" : payment === "bhim" ? "BHIM UPI" : "Card",
+        theme: { color: "#d63b85" },
+        prefill: { name: addr.full_name, email: addr.email, contact: addr.phone, method: payment === "card" ? "card" : "upi" },
+        method: payment === "card" ? { card: true } : { upi: true },
+        ...methodHint,
+        handler: async (resp) => {
+          try {
+            const { data: verified } = await api.post("/payments/razorpay/verify", {
+              order_id: order.id,
+              razorpay_order_id: resp.razorpay_order_id,
+              razorpay_payment_id: resp.razorpay_payment_id,
+              razorpay_signature: resp.razorpay_signature,
+            });
+            setPlaced(verified.order || { ...order, payment_status: "paid", status: "confirmed" });
+            clear();
+          } catch (err) {
+            alert("Payment received but verification failed. Contact support with order #" + order.id.slice(0,8));
+          } finally { setPlacing(false); }
+        },
+        modal: {
+          ondismiss: () => { setPlacing(false); alert("Payment cancelled. Your order is saved as pending — you can retry from tracking."); }
+        },
+      });
+      rzpInstance.open();
     } catch (e) {
-      alert(e.response?.data?.detail || "Order failed");
-    } finally { setPlacing(false); }
+      alert(e.response?.data?.detail || e.message || "Order failed");
+      setPlacing(false);
+    }
   };
 
   if (placed) {
@@ -73,7 +135,7 @@ export default function Checkout() {
             LOCKED IN! 🔒
           </h1>
           <p className={`mt-4 text-lg ${isHer ? "text-slate-700" : "text-slate-300"} font-bricolage`}>
-            Your order is confirmed. We'll text the tracking link to {placed.address.phone}.
+            Your order is confirmed. We&apos;ll text the tracking link to {placed.address.phone}.
           </p>
           <div className={`mt-8 ${isHer ? "card-pink" : "card-navy"} p-6 text-left`}>
             <div className="text-xs uppercase tracking-widest font-mono-sleek opacity-60 mb-2">Tracking</div>
@@ -155,15 +217,42 @@ export default function Checkout() {
 
               <section>
                 <h2 className="font-display-pink text-3xl chrome-text-pink">Payment</h2>
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  {["cod","prepaid"].map((m) => (
-                    <label key={m} className={`p-4 rounded-lg border-2 cursor-pointer ${payment===m ? "border-pink-500 bg-pink-50" : "border-pink-200"}`}>
-                      <input type="radio" name="pay" checked={payment===m} onChange={() => setPayment(m)} className="mr-2" data-testid={`pay-${m}`} />
-                      {m === "cod" ? "Cash on Delivery" : "Prepaid (UPI / Cards)"}
-                    </label>
-                  ))}
+                <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {methods.map((m) => {
+                    const Icon = PM_ICONS[m.id] || CreditCard;
+                    const disabled = !m.enabled;
+                    return (
+                      <label
+                        key={m.id}
+                        className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                          payment === m.id ? "border-pink-500 bg-pink-50 shadow-md" :
+                          disabled ? "border-pink-100 bg-pink-50/30 opacity-50 cursor-not-allowed" :
+                          "border-pink-200 hover:border-pink-300 bg-white"
+                        }`}
+                      >
+                        <input
+                          type="radio" name="pay"
+                          checked={payment === m.id}
+                          disabled={disabled}
+                          onChange={() => setPayment(m.id)}
+                          className="absolute opacity-0"
+                          data-testid={`pay-${m.id}`}
+                        />
+                        <div className="flex items-center gap-2">
+                          <Icon className="w-5 h-5 text-pink-600" />
+                          <div className="font-bricolage font-semibold text-sm">{m.label}</div>
+                        </div>
+                        {disabled && <div className="mt-1 text-[10px] uppercase tracking-wider text-pink-500/70 font-mono-sleek">Not connected</div>}
+                      </label>
+                    );
+                  })}
                 </div>
-                {payment === "prepaid" && <p className="text-xs text-slate-500 mt-2">Prepaid mocked for now — pay on delivery to confirm fastest.</p>}
+                {payment !== "cod" && methods.find((m) => m.id === payment)?.enabled && (
+                  <p className="text-xs text-pink-700 mt-2">You&apos;ll be redirected to Razorpay&apos;s secure payment screen. Test mode keys show &quot;Test Mode&quot; banner.</p>
+                )}
+                {!rzpKey && payment !== "cod" && (
+                  <p className="text-xs text-pink-700 mt-2">⚠️ Online payments not connected yet — admin needs to add Razorpay keys in /admin/settings.</p>
+                )}
               </section>
             </>
           )}
