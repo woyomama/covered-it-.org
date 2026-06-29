@@ -1,59 +1,61 @@
 # Covered IT! v2 — PRD
 
 ## Original Problem Statement
-Phone case e-commerce site (Covered IT! v2). Four sections — Her (pink chrome Y2K with animated flip-phone), Him (midnight navy / liquid metal / cracked stone), Collab (split aesthetic), Charms (chrome + glass + bow). Multi-phone-model compatibility per product, search-by-model, mandatory phone-model picker at checkout, coupons, Shiprocket auto-shipment (stub), full admin panel. Publish today.
+Phone case e-commerce: Her (pink chrome Y2K), Him (midnight navy), Collab, Charms. Multi-phone-model compat per product, search by model, mandatory phone-model picker at checkout. Coupons MAINCHAR10/LOCKEDIN20. Shiprocket auto-shipment + admin panel. Publish today.
 
 ## Tech Stack
-- Backend: FastAPI + Motor (MongoDB) + JWT + bcrypt
-- Frontend: React 19 + react-router-dom v7 + Tailwind CSS + Axios + lucide-react
-- Display fonts: Boska, Clash Display, Editorial New, Bricolage Grotesque, Space Grotesk
+FastAPI + Motor (MongoDB) + JWT/bcrypt · React 19 + react-router-dom v7 + Tailwind + Axios + Razorpay Checkout (lazy-loaded) · Display fonts Boska, Clash Display, Editorial New, Bricolage Grotesque, Space Grotesk
 
 ## Architecture
-- Backend single file: `/app/backend/server.py` (~900 lines) — auto-seeds admin, 80+ phone models, 16 products, 2 coupons on startup
-- Frontend pages: `/app/frontend/src/pages/*` + `/app/frontend/src/pages/admin/*`
-- Contexts: `Auth` (localStorage `ci_token` + Bearer + httpOnly cookie), `Cart` (localStorage `ci_cart_v1`)
+- Backend: `/app/backend/server.py` (~1100 lines) — auto-seeds admin, 80+ phone models, 16 products, 2 coupons
+- Frontend: `src/pages/*` + `src/pages/admin/*` + `src/components/*` + contexts (Auth, Cart)
 - API base: `${REACT_APP_BACKEND_URL}/api`
 
-## User Personas
-1. **Gen-Z customer (Her)** — wants Y2K chrome aesthetic, charms, fast checkout
-2. **Gen-Z customer (Him)** — wants midnight navy, no logos, premium feel
-3. **Founder/Admin** — needs clear product CRUD, phone model picker, order tracking
+## What's implemented (Jan 2026)
+✅ Auth (JWT bearer + httpOnly cookie, idempotent admin seed)
+✅ Products CRUD with multi-model compatibility array & step-by-step admin form
+✅ Phone Models CRUD (~80 seeded: Apple/Samsung/OnePlus/Oppo/Vivo/Realme/Xiaomi/Nothing)
+✅ Coupons (MAINCHAR10 10% min ₹499, LOCKEDIN20 20% min ₹999)
+✅ Orders + tracking page (4-step progress: Placed → Locked In → Shipped → Delivered)
+✅ Customers aggregation + analytics
+✅ Reels CRUD
+✅ Search by phone model / brand / tag
+✅ All 4 customer sections live: /her (animated Y2K flip-phone viewfinder), /him (midnight navy with stone texture + "He's that guy. *period.*"), /collab (split aesthetic), /charms (6 sellable charms ₹199-459)
+✅ Mandatory phone-model picker per cart item
+✅ Success screen "LOCKED IN! 🔒"
+✅ **Zone-based shipping** (Mumbai ₹39, Maharashtra ₹59, Metros ₹69, Rest ₹89, FREE above ₹799)
+✅ **COD handling fee ₹39** auto-added when COD selected
+✅ **Live quote endpoint** — re-prices as pincode/payment/coupon changes
+✅ "Add ₹X more for FREE shipping" hint on checkout
+✅ Admin Settings — 3 tabs (Store, Shipping, Payments) with connection badges
+✅ Razorpay integration scaffolded — UPI/BHIM/PhonePe/Card all flow through Razorpay popup once keys are pasted (server-side HMAC signature verify)
+✅ Shiprocket integration scaffolded — real-API call when creds configured, mock AWB fallback otherwise
+✅ Test/Disconnect buttons for both integrations
+✅ Editable shipping config (free_shipping_threshold, cod_fee) in admin
+✅ 41/41 backend tests passing on initial e2e suite
 
-## Core Requirements (Static)
-- 4 sections: /her /him /collab /charms with distinct moodboards
-- Phone model database, used in product compatibility & search
-- Mandatory model picker per cart item at checkout (non-charm)
-- Order success copy "LOCKED IN! 🔒"
-- Coupons: MAINCHAR10 (10%, min 499), LOCKEDIN20 (20%, min 999)
-- Shiprocket auto-shipment stub (DO NOT MODIFY)
-- Pickup pincode 400043
+## Mocked / pending real creds
+- 🟡 Razorpay: scaffold ready, customer needs to paste Key ID + Key Secret in /admin/settings → Payments → test → live
+- 🟡 Shiprocket: scaffold ready, customer needs to paste email/password in /admin/settings → Shipping → test → live. Falls back to `SR{order-prefix}` mock AWB if not configured.
+
+## Default settings
+- Pickup pincode: 400043 (Mumbai)
+- COD fee: ₹39
+- Free shipping threshold: ₹799
 - Admin: admin@coveredit.in / admin123
 
-## Implemented (Jan 2026)
-✅ Backend: auth, products CRUD, phone-models CRUD, coupons CRUD, orders, customers, analytics, reels, webhooks, settings
-✅ Frontend public: Landing, Her (with animated flip-phone viewfinder), Him, Collab, Charms, Product page, Search, Checkout, Track, Login
-✅ Frontend admin: Dashboard, Products (step-by-step form with multi-model picker), Orders, Customers, Coupons, Reels, Phone Models (~80 seeded), Settings
-✅ Mandatory phone-model picker per cart item
-✅ Coupons apply at checkout
-✅ Order success page shows "LOCKED IN! 🔒"
-✅ Shiprocket auto-shipment stub creates AWB on order placement
-✅ Brand voice: "He's that guy. *period.*" for Him, "Her era is iconic" for Her
-✅ Fixed FI ligature rendering bug (renamed Confirmed → Locked In)
-✅ 41/41 backend pytest tests passing, frontend e2e verified
-
 ## Backlog (P1/P2)
-- [ ] Real Stripe/Razorpay prepaid integration (currently mocked)
-- [ ] Real Shiprocket OAuth + auto-shipment API (currently stub returning SR-prefix AWB)
-- [ ] Image upload to S3/Cloudinary in admin form (currently URL paste)
-- [ ] Reels playback page for customers (/reels)
-- [ ] Wishlist / favourites
-- [ ] Customer accounts + order history by email
-- [ ] Rate limiting on /api/orders + /api/auth/login
-- [ ] Email/SMS notifications for order confirmation
-- [ ] Inventory deduction on order place
-- [ ] Refund/exchange flow
+- OTP verify phone before COD (reduces RTO 40-60%)
+- "Complete the look" charm upsell on product page
+- Real image upload (Cloudinary)
+- Email/SMS notifications
+- Customer accounts + order history by email
+- Inventory deduction on order
+- Refund/exchange flow
+- Webhook signature verify for Razorpay webhooks
+- /reels playback page for customers
 
 ## Next Tasks
-1. Hook real Shiprocket API once user provides credentials
-2. Wire Razorpay for prepaid orders
-3. Real image upload via Cloudinary or S3
+1. User pastes Razorpay test keys → verify UPI checkout end-to-end
+2. User completes Shiprocket KYC + adds "Primary" pickup → verify real AWB
+3. Switch Razorpay to live mode after 1-2 test orders

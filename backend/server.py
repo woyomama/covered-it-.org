@@ -422,31 +422,89 @@ async def _shiprocket_create_shipment(order: dict) -> dict:
         return {"awb": f"SR{order['id'][:8].upper()}", "courier": "Shiprocket-Mock-Exception", "tracking_url": f"/track/{order['id']}", "mocked": True}
 
 
-@api.post("/orders")
-async def create_order(body: OrderIn):
-    # compute totals
-    subtotal = sum(i.price * i.qty for i in body.items)
+# =====================================================
+#  SHIPPING & COD FEE CALCULATOR
+# =====================================================
+# India pincode zones — first digit decides delivery zone.
+# Mumbai pickup (400043) → cheapest for Maharashtra (4xxxxx).
+PINCODE_ZONES = {
+    "metro_local":  {"prefix": ("400", "401", "402", "403", "410", "411", "421"), "fee": 39, "name": "Mumbai / MMR"},
+    "state":        {"prefix": ("4",), "fee": 59, "name": "Maharashtra"},
+    "metro":        {"prefix": ("110", "560", "600", "700", "500", "800", "380", "560"), "fee": 69, "name": "Metro"},
+}
+DEFAULT_SHIPPING = 89  # rest of India
+COD_FEE_DEFAULT = 39
+FREE_SHIPPING_THRESHOLD_DEFAULT = 799
+
+
+def _shipping_for_pincode(pincode: str | None, subtotal: float, free_threshold: int) -> tuple[int, str]:
+    """Returns (fee, zone_name)."""
+    if subtotal >= free_threshold:
+        return 0, "Free"
+    if not pincode:
+        return DEFAULT_SHIPPING, "Standard"
+    pin = str(pincode).strip()
+    for z in PINCODE_ZONES.values():
+        if pin.startswith(z["prefix"]):
+            return z["fee"], z["name"]
+    return DEFAULT_SHIPPING, "Rest of India"
+
+
+async def _compute_quote(items: list, pincode: str | None, payment_method: str, coupon_code: str | None) -> dict:
+    s = await _settings_raw()
+    cod_fee_amt = int(s.get("cod_fee", COD_FEE_DEFAULT))
+    free_thr = int(s.get("free_shipping_threshold", FREE_SHIPPING_THRESHOLD_DEFAULT))
+    subtotal = round(sum(float(i["price"]) * int(i["qty"]) for i in items), 2)
     discount = 0.0
     coupon_used = None
-    if body.coupon_code:
-        try:
-            coupon_resp = await apply_coupon(CouponApply(code=body.coupon_code, subtotal=subtotal))
-            discount = coupon_resp["discount"]
-            coupon_used = body.coupon_code.upper()
-        except HTTPException:
-            pass
-    shipping = 0 if subtotal >= 499 else 49
-    total = round(subtotal - discount + shipping, 2)
+    if coupon_code:
+        c = await db.coupons.find_one({"code": coupon_code.upper(), "active": True}, {"_id": 0})
+        if c and subtotal >= c.get("min_order", 0):
+            discount = round(subtotal * (c["value"] / 100), 2) if c["type"] == "percentage" else float(c["value"])
+            coupon_used = coupon_code.upper()
+    shipping, zone = _shipping_for_pincode(pincode, subtotal, free_thr)
+    cod_fee = cod_fee_amt if payment_method == "cod" else 0
+    total = round(max(0, subtotal - discount) + shipping + cod_fee, 2)
+    return {
+        "subtotal": subtotal,
+        "discount": discount,
+        "coupon_code": coupon_used,
+        "shipping": shipping,
+        "shipping_zone": zone,
+        "free_shipping_threshold": free_thr,
+        "cod_fee": cod_fee,
+        "total": total,
+    }
+
+
+class QuoteIn(BaseModel):
+    items: List[CartItem]
+    pincode: Optional[str] = None
+    payment_method: Literal["cod", "upi", "phonepe", "bhim", "card", "prepaid"] = "cod"
+    coupon_code: Optional[str] = None
+
+
+@api.post("/checkout/quote")
+async def checkout_quote(body: QuoteIn):
+    return await _compute_quote([i.model_dump() for i in body.items], body.pincode, body.payment_method, body.coupon_code)
+
+
+@api.post("/orders")
+async def create_order(body: OrderIn):
+    items_d = [i.model_dump() for i in body.items]
+    q = await _compute_quote(items_d, body.address.pincode, body.payment_method, body.coupon_code)
     oid = str(uuid.uuid4())
     order = {
         "id": oid,
-        "items": [i.model_dump() for i in body.items],
+        "items": items_d,
         "address": body.address.model_dump(),
-        "subtotal": subtotal,
-        "discount": discount,
-        "shipping": shipping,
-        "total": total,
-        "coupon_code": coupon_used,
+        "subtotal": q["subtotal"],
+        "discount": q["discount"],
+        "shipping": q["shipping"],
+        "shipping_zone": q["shipping_zone"],
+        "cod_fee": q["cod_fee"],
+        "total": q["total"],
+        "coupon_code": q["coupon_code"],
         "payment_method": body.payment_method,
         "payment_status": "pending" if body.payment_method != "cod" else "cod",
         "notes": body.notes,
@@ -454,7 +512,6 @@ async def create_order(body: OrderIn):
         "shipment": None,
         "created_at": now_iso(),
     }
-    # For prepaid orders, DON'T auto-ship yet — only after payment is verified.
     if body.payment_method == "cod":
         try:
             ship = await _shiprocket_create_shipment(order)

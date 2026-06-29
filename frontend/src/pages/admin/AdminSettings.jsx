@@ -106,6 +106,21 @@ export default function AdminSettings() {
             <Field label="Pickup pincode" hint="Used as the dispatch location in Shiprocket.">
               <input data-testid="setting-pickup" value={s.pickup_pincode || ""} onChange={(e) => setS({...s, pickup_pincode: e.target.value})} className="form-input" placeholder="400043" />
             </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Free shipping above (₹)" hint="Orders ≥ this amount get FREE shipping.">
+                <input data-testid="setting-free-thr" type="number" value={s.free_shipping_threshold ?? ""} onChange={(e) => setS({...s, free_shipping_threshold: e.target.value === "" ? "" : Number(e.target.value)})} className="form-input" placeholder="799" />
+              </Field>
+              <Field label="COD handling fee (₹)" hint="Extra charge added when customer picks Cash on Delivery.">
+                <input data-testid="setting-cod-fee" type="number" value={s.cod_fee ?? ""} onChange={(e) => setS({...s, cod_fee: e.target.value === "" ? "" : Number(e.target.value)})} className="form-input" placeholder="39" />
+              </Field>
+            </div>
+            <div className="text-[11px] text-slate-500 border-l-2 border-emerald-500/40 pl-3">
+              <b className="text-slate-400">Zone-based shipping (auto):</b><br/>
+              Mumbai / MMR (400-403, 410-421) — ₹39<br/>
+              Rest of Maharashtra (4xxxxx) — ₹59<br/>
+              Metros (Delhi 110, Bengaluru 560, Chennai 600, Kolkata 700, Hyd 500, Patna 800, Ahmedabad 380) — ₹69<br/>
+              Rest of India — ₹89
+            </div>
             <Field label="Shiprocket email">
               <input data-testid="setting-sr-email" value={s.shiprocket_email || ""} onChange={(e) => setS({...s, shiprocket_email: e.target.value})} className="form-input" placeholder="you@example.com" autoComplete="off" />
             </Field>

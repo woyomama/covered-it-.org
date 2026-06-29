@@ -42,10 +42,27 @@ export default function Checkout() {
     api.get("/payments/methods").then((r) => { setMethods(r.data.methods); setRzpKey(r.data.razorpay_key_id); });
   }, []);
 
+  const [quote, setQuote] = useState({ subtotal: 0, discount: 0, shipping: 0, cod_fee: 0, total: 0, shipping_zone: "" });
+
+  // re-quote whenever cart, pincode, payment, or coupon changes
+  useEffect(() => {
+    if (!items.length) { setQuote({ subtotal: 0, discount: 0, shipping: 0, cod_fee: 0, total: 0, shipping_zone: "" }); return; }
+    const t = setTimeout(() => {
+      api.post("/checkout/quote", {
+        items, pincode: addr.pincode || null, payment_method: payment, coupon_code: coupon || null,
+      }).then((r) => {
+        setQuote(r.data);
+        if (r.data.coupon_code) setCouponMsg(`✓ ₹${r.data.discount} off applied`);
+        else if (coupon && !r.data.coupon_code) setCouponMsg("Coupon not applicable");
+      }).catch(() => {});
+    }, 250);
+    return () => clearTimeout(t);
+  }, [items, addr.pincode, payment, coupon]);
+
   const applyCoupon = async () => {
     if (!coupon.trim()) return;
     try {
-      const { data } = await api.post("/coupons/apply", { code: coupon.trim(), subtotal });
+      const { data } = await api.post("/coupons/apply", { code: coupon.trim(), subtotal: quote.subtotal || subtotal });
       setDiscount(data.discount);
       setCouponMsg(`✓ ₹${data.discount} off applied`);
     } catch (e) {
@@ -54,8 +71,7 @@ export default function Checkout() {
     }
   };
 
-  const shipping = subtotal >= 499 ? 0 : 49;
-  const total = Math.max(0, subtotal - discount + shipping);
+  const total = quote.total;
 
   const place = async (e) => {
     e.preventDefault();
@@ -264,9 +280,19 @@ export default function Checkout() {
             <div className="card-pink p-6 sticky top-24">
               <h3 className="font-display-pink text-2xl chrome-text-pink">Order summary</h3>
               <div className="mt-4 space-y-2 text-sm">
-                <Row k="Subtotal" v={`₹${subtotal}`} />
-                <Row k="Shipping" v={shipping === 0 ? "FREE" : `₹${shipping}`} />
-                {discount > 0 && <Row k="Discount" v={`− ₹${discount}`} cls="text-pink-700" />}
+                <Row k="Subtotal" v={`₹${quote.subtotal || subtotal}`} />
+                {quote.discount > 0 && <Row k={`Discount${quote.coupon_code ? ` (${quote.coupon_code})` : ""}`} v={`− ₹${quote.discount}`} cls="text-pink-700" />}
+                <Row
+                  k={`Shipping${quote.shipping_zone ? ` · ${quote.shipping_zone}` : ""}`}
+                  v={quote.shipping === 0 ? "FREE 🚚" : `₹${quote.shipping}`}
+                  cls={quote.shipping === 0 ? "text-emerald-600 font-semibold" : ""}
+                />
+                {quote.cod_fee > 0 && <Row k="COD handling fee" v={`+ ₹${quote.cod_fee}`} cls="text-pink-700" />}
+                {quote.shipping > 0 && quote.free_shipping_threshold && (
+                  <div className="text-[11px] text-pink-600 italic" data-testid="free-shipping-hint">
+                    Add ₹{Math.max(0, quote.free_shipping_threshold - quote.subtotal)} more for FREE shipping
+                  </div>
+                )}
                 <div className="border-t border-pink-200 pt-3 mt-3 flex justify-between font-display-pink text-2xl text-pink-800">
                   <span>Total</span><span data-testid="checkout-total">₹{total}</span>
                 </div>
