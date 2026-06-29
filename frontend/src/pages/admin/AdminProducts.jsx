@@ -14,7 +14,8 @@ export default function AdminProducts() {
   const [search, setSearch] = useState("");
 
   const load = () => api.get("/products", { params: { limit: 500 } }).then((r) => setItems(r.data));
-  useEffect(() => { load(); api.get("/phone-models").then((r) => setModels(r.data)); }, []);
+  const reloadModels = () => api.get("/phone-models").then((r) => setModels(r.data));
+  useEffect(() => { load(); reloadModels(); }, []);
 
   const save = async () => {
     const body = { ...editing, price: Number(editing.price), mrp: Number(editing.mrp || 0), stock: Number(editing.stock || 0) };
@@ -178,8 +179,10 @@ function Field({ label, hint, children }) {
   );
 }
 
-function ModelPicker({ models, selected, onChange }) {
+function ModelPicker({ models, selected, onChange, onModelsReload }) {
   const [q, setQ] = useState("");
+  const [addingBrand, setAddingBrand] = useState("");
+  const [adding, setAdding] = useState(false);
   const allByBrand = models.reduce((acc, m) => {
     (acc[m.brand] = acc[m.brand] || []).push(m);
     return acc;
@@ -199,6 +202,46 @@ function ModelPicker({ models, selected, onChange }) {
   const clearBrand = (brand) => {
     const names = new Set((allByBrand[brand] || []).map((m) => m.name));
     onChange(selected.filter((n) => !names.has(n)));
+  };
+
+  // Does the search query already exist? (case-insensitive)
+  const qTrim = q.trim();
+  const exactMatch = qTrim && models.some((m) => m.name.toLowerCase() === qTrim.toLowerCase());
+
+  const guessBrand = (s) => {
+    const lower = s.toLowerCase();
+    if (lower.includes("iphone")) return "Apple";
+    if (lower.includes("galaxy") || lower.includes("samsung")) return "Samsung";
+    if (lower.startsWith("oneplus")) return "OnePlus";
+    if (lower.startsWith("oppo")) return "Oppo";
+    if (lower.startsWith("vivo")) return "Vivo";
+    if (lower.startsWith("realme") || lower.startsWith("narzo")) return "Realme";
+    if (lower.startsWith("redmi") || lower.startsWith("xiaomi") || lower.startsWith("mi ") || lower.startsWith("poco")) return "Xiaomi";
+    if (lower.startsWith("nothing")) return "Nothing";
+    if (lower.startsWith("motorola") || lower.startsWith("moto")) return "Motorola";
+    if (lower.startsWith("infinix")) return "Infinix";
+    if (lower.startsWith("tecno")) return "Tecno";
+    if (lower.startsWith("honor")) return "Honor";
+    if (lower.startsWith("google") || lower.startsWith("pixel")) return "Google";
+    return "";
+  };
+
+  const addCustom = async () => {
+    if (!qTrim) return;
+    const brand = addingBrand || guessBrand(qTrim);
+    if (!brand) {
+      alert("Tell me which brand this is — type the brand in the brand box below the search.");
+      return;
+    }
+    setAdding(true);
+    try {
+      await api.post("/phone-models", { brand, series: "", name: qTrim });
+      await onModelsReload?.();
+      onChange([...new Set([...selected, qTrim])]);
+      setQ(""); setAddingBrand("");
+    } catch (e) {
+      alert(e.response?.data?.detail || "Couldn't add model");
+    } finally { setAdding(false); }
   };
 
   return (
@@ -232,10 +275,49 @@ function ModelPicker({ models, selected, onChange }) {
         )}
       </div>
 
-      {/* search bar */}
+      {/* search bar + add-custom panel */}
       <div className="flex items-center gap-2">
-        <input data-testid="form-model-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔎 Filter brand / model (e.g. Oppo, iPhone 15)" className="form-input" />
+        <input
+          data-testid="form-model-search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="🔎 Type a model — if not found you can add it (e.g. iPhone 17 Pro, Oppo A60)"
+          className="form-input"
+        />
       </div>
+
+      {/* Inline add-new-model row — shows only when query has no exact match */}
+      {qTrim && !exactMatch && (
+        <div className="mt-2 p-3 rounded-lg border border-emerald-500/40 bg-emerald-500/5" data-testid="model-add-custom-panel">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="text-sm text-emerald-200">
+              &quot;<b>{qTrim}</b>&quot; isn&apos;t in your bank yet. Add it now?
+            </div>
+            <div className="flex gap-2 items-center">
+              <input
+                data-testid="model-add-brand"
+                value={addingBrand || guessBrand(qTrim) || ""}
+                onChange={(e) => setAddingBrand(e.target.value)}
+                placeholder="Brand (Apple, Oppo…)"
+                className="form-input"
+                style={{ width: 160 }}
+              />
+              <button
+                type="button"
+                disabled={adding}
+                onClick={addCustom}
+                data-testid="model-add-custom-btn"
+                className="btn-chrome-navy text-xs"
+              >
+                {adding ? "Adding…" : `+ Add "${qTrim}"`}
+              </button>
+            </div>
+          </div>
+          <div className="text-[10px] text-slate-400 mt-1 font-mono-sleek uppercase tracking-widest">
+            Adds to master phone bank · auto-selected for this product · reusable on future products
+          </div>
+        </div>
+      )}
 
       <div className="mt-3 max-h-80 overflow-y-auto pr-2 space-y-3">
         {Object.entries(byBrand).map(([brand, list]) => {
@@ -274,8 +356,8 @@ function ModelPicker({ models, selected, onChange }) {
             </div>
           );
         })}
-        {Object.keys(byBrand).length === 0 && (
-          <div className="text-center text-slate-500 py-6 text-sm">No models match &quot;{q}&quot;. Add one in /admin/models.</div>
+        {Object.keys(byBrand).length === 0 && !qTrim && (
+          <div className="text-center text-slate-500 py-6 text-sm">No models in your bank yet. Add one via the search above or /admin/models.</div>
         )}
       </div>
     </div>
