@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
+import CustomOrdersBanner from "@/components/CustomOrdersBanner";
 import ProductCard from "@/components/ProductCard";
 
 export default function Collab() {
@@ -14,6 +15,7 @@ export default function Collab() {
   return (
     <div data-testid="collab-page">
       <Nav tone="collab" />
+      <CustomOrdersBanner tone="pink" />
 
       <section className="collab-split relative">
         <div className="max-w-[1440px] mx-auto px-6 lg:px-10 py-20 grid lg:grid-cols-2 gap-10 items-center">

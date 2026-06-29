@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
+import CustomOrdersBanner from "@/components/CustomOrdersBanner";
 import ProductCard from "@/components/ProductCard";
 import { Sparkles } from "lucide-react";
 
@@ -12,6 +13,7 @@ export default function Charms() {
   return (
     <div className="her-bg her-grain min-h-screen" data-testid="charms-page">
       <Nav tone="pink" />
+      <CustomOrdersBanner tone="pink" />
 
       <section className="max-w-[1440px] mx-auto px-6 lg:px-10 pt-10 pb-12 relative">
         <div className="chip-pink mb-4"><Sparkles className="w-3 h-3" /> Chrome · Glass · Bows</div>

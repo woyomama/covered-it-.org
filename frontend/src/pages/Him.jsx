@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
+import CustomOrdersBanner from "@/components/CustomOrdersBanner";
 import ProductCard from "@/components/ProductCard";
 import { Hexagon, Lock, Wind } from "lucide-react";
 
@@ -15,6 +16,7 @@ export default function Him() {
   return (
     <div className="him-bg him-stone min-h-screen text-slate-100" data-testid="him-page">
       <Nav tone="navy" />
+      <CustomOrdersBanner tone="navy" />
 
       <section className="max-w-[1440px] mx-auto px-6 lg:px-10 pt-10 pb-20 relative">
         <div className="grid lg:grid-cols-2 gap-12 items-center">

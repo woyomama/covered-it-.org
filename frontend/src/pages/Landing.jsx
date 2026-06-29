@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import api from "@/lib/api";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
+import CustomOrdersBanner from "@/components/CustomOrdersBanner";
 import { ArrowRight, Sparkles, Lock, Heart } from "lucide-react";
 
 export default function Landing() {
@@ -19,6 +20,7 @@ export default function Landing() {
   return (
     <div data-testid="landing-page">
       <Nav tone="collab" />
+      <CustomOrdersBanner tone="pink" />
 
       {/* HERO — split chrome */}
       <section className="collab-split relative overflow-hidden">
@@ -46,7 +48,7 @@ export default function Landing() {
               For The<br/>Quiet<br/>Killers.
             </h1>
             <p className="mt-6 max-w-md lg:ml-auto font-bricolage text-slate-300 text-lg">
-              Midnight navy, liquid metal swirls, cracked stone. Built for boys who don't need a logo.
+              Midnight navy, liquid metal swirls, cracked stone. Built for boys who don&apos;t need a logo.
             </p>
             <div className="mt-8 flex gap-3 flex-wrap lg:justify-end">
               <Link to="/him" className="btn-chrome-navy" data-testid="hero-cta-him">Shop Him <ArrowRight className="w-4 h-4" /></Link>
@@ -111,8 +113,49 @@ export default function Landing() {
         <Grid items={products.charms} tone="pink" />
       </section>
 
+      {/* CUSTOM ORDERS CTA */}
+      <CustomOrdersSection />
+
       <Footer tone="pink" />
     </div>
+  );
+}
+
+import { Instagram } from "lucide-react";
+function CustomOrdersSection() {
+  const [handle, setHandle] = useState("");
+  useEffect(() => {
+    api.get("/settings").then((r) => setHandle((r.data?.instagram || "").trim().replace(/^@/, ""))).catch(()=>{});
+  }, []);
+  const url = handle
+    ? (handle.startsWith("http") ? handle : `https://instagram.com/${handle}`)
+    : "https://instagram.com";
+  return (
+    <section className="collab-split relative overflow-hidden" data-testid="custom-orders-section">
+      <div className="absolute inset-0 her-grain opacity-30 pointer-events-none"></div>
+      <div className="max-w-[1100px] mx-auto px-6 lg:px-10 py-24 text-center relative">
+        <div className="chip-pink mb-4 mx-auto"><Sparkles className="w-3 h-3" /> Made just for you</div>
+        <h2 className="font-display-pink text-6xl md:text-8xl leading-[0.9] chrome-text-pink">
+          We take<br/>custom orders.
+        </h2>
+        <p className="mt-6 max-w-2xl mx-auto text-slate-700 font-bricolage text-lg">
+          Want your name on a chrome melt back? A colour we don&apos;t sell? Your bestie&apos;s pic as a bow charm? Slide into our DMs with your phone model + the vibe, and we&apos;ll cook 🔥
+        </p>
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          data-testid="custom-orders-ig-cta"
+          className="btn-chrome-pink mt-8 inline-flex"
+        >
+          <Instagram className="w-4 h-4" />
+          DM us {handle ? `@${handle}` : "on Instagram"}
+        </a>
+        <div className="mt-4 text-xs font-mono-sleek text-pink-700 uppercase tracking-widest">
+          Reply in 24h · Quote shared after we see the model & idea
+        </div>
+      </div>
+    </section>
   );
 }
 

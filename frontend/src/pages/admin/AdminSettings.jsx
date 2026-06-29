@@ -89,8 +89,8 @@ export default function AdminSettings() {
             <Field label="Contact email">
               <input data-testid="setting-email" value={s.contact_email || ""} onChange={(e) => setS({...s, contact_email: e.target.value})} className="form-input" />
             </Field>
-            <Field label="Instagram handle">
-              <input data-testid="setting-instagram" value={s.instagram || ""} onChange={(e) => setS({...s, instagram: e.target.value})} className="form-input" placeholder="@coveredit" />
+            <Field label="Instagram handle" hint="Just your handle without @. Used on the storefront DM-us button & footer.">
+              <input data-testid="setting-instagram" value={s.instagram || ""} onChange={(e) => setS({...s, instagram: e.target.value})} className="form-input" placeholder="coveredit_official" />
             </Field>
           </>
         )}
