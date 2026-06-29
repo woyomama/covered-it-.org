@@ -580,7 +580,11 @@ async def analytics_summary(admin=Depends(get_current_admin)):
     by_cat = {}
     async for d in db.products.aggregate([{"$group": {"_id": "$category", "n": {"$sum": 1}}}]):
         by_cat[d["_id"]] = d["n"]
-    customers = len(set([o["address"]["email"] async for o in db.orders.find({}, {"address.email": 1})]))
+    customer_agg = await db.orders.aggregate([
+        {"$group": {"_id": "$address.email"}},
+        {"$count": "n"},
+    ]).to_list(1)
+    customers = customer_agg[0]["n"] if customer_agg else 0
     recent = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).limit(5).to_list(5)
     return {
         "total_orders": total_orders,
