@@ -35,6 +35,18 @@ db = client[DB_NAME]
 app = FastAPI(title="Covered IT! v2 API")
 api = APIRouter(prefix="/api")
 
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://covered-it-org-1.onrender.com",
+        "https://covered-it-org.onrender.com"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
 log = logging.getLogger("coveredit")
 
@@ -178,7 +190,19 @@ class ReelIn(BaseModel):
     product_id: Optional[str] = None
     caption: Optional[str] = ""
 
-
+@app.on_event("startup")
+async def seed_admin():
+    admin_exists = await db.users.find_one({"email": ADMIN_EMAIL})
+    if not admin_exists:
+        log.info(f"Seeding default admin user: {ADMIN_EMAIL}")
+        await db.users.insert_one({
+            "id": str(uuid.uuid4()),
+            "email": ADMIN_EMAIL,
+            "password_hash": hash_password(ADMIN_PASSWORD),
+            "name": "Super Admin",
+            "role": "admin",
+            "created_at": now_iso()
+        })
 # =====================================================
 #  AUTH
 # =====================================================
