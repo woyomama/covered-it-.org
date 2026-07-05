@@ -29,32 +29,30 @@ function App() {
     <div className="App">
       <AuthProvider>
         <CartProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route path="/her" element={<Her />} />
-              <Route path="/him" element={<Him />} />
-              <Route path="/collab" element={<Collab />} />
-              <Route path="/charms" element={<Charms />} />
-              <Route path="/product/:id" element={<Product />} />
-              <Route path="/search" element={<Search />} />
-              <Route path="/checkout" element={<Checkout />} />
-              <Route path="/track" element={<Track />} />
-              <Route path="/track/:id" element={<Track />} />
-              <Route path="/login" element={<Login />} />
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/her" element={<Her />} />
+            <Route path="/him" element={<Him />} />
+            <Route path="/collab" element={<Collab />} />
+            <Route path="/charms" element={<Charms />} />
+            <Route path="/product/:id" element={<Product />} />
+            <Route path="/search" element={<Search />} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/track" element={<Track />} />
+            <Route path="/track/:id" element={<Track />} />
+            <Route path="/login" element={<Login />} />
 
-              <Route path="/admin" element={<AdminLayout />}>
-                <Route index element={<AdminDashboard />} />
-                <Route path="products"  element={<AdminProducts />} />
-                <Route path="orders"    element={<AdminOrders />} />
-                <Route path="customers" element={<AdminCustomers />} />
-                <Route path="coupons"   element={<AdminCoupons />} />
-                <Route path="reels"     element={<AdminReels />} />
-                <Route path="models"    element={<AdminModels />} />
-                <Route path="settings"  element={<AdminSettings />} />
-              </Route>
-            </Routes>
-          </BrowserRouter>
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<AdminDashboard />} />
+              <Route path="products" element={<AdminProducts />} />
+              <Route path="orders" element={<AdminOrders />} />
+              <Route path="customers" element={<AdminCustomers />} />
+              <Route path="coupons" element={<AdminCoupons />} />
+              <Route path="reels" element={<AdminReels />} />
+              <Route path="models" element={<AdminModels />} />
+              <Route path="settings" element={<AdminSettings />} />
+            </Route>
+          </Routes>
         </CartProvider>
       </AuthProvider>
     </div>
